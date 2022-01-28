@@ -1,4 +1,4 @@
-function mask = VBJS_weights_speck2D(f_tilde)
+function mask = VBJS_mask(f_tilde)
 % VBJS weights. Algorithm introduced in "Joint sparse recovery based on
 % variances" by Adcock et al. Code originally written by Theresa Scarnati.
 %
