@@ -93,12 +93,12 @@ end
 yWeights = zeros(N1,N2).';
 yMask = .01*ones(N1,N2).';
 if strcmp(params.funct,'sparseEdge')
-    xMask = VBJS_weights_speck2D(abs(xJumpVec));
+    xMask = VBJS_mask(abs(xJumpVec));
     if params.DIM == 2
-        yMask = VBJS_weights_speck2D(abs(yJumpVec));
+        yMask = VBJS_mask(abs(yJumpVec));
     end
 elseif strcmp(params.funct,'sparseSig')
-    xMask = VBJS_weights_speck2D(abs(AH(mmv(:,jj))));
+    xMask = VBJS_mask(abs(AH(mmv(:,jj))));
 end
 
 M = reshape((xMask+yMask)>1,N1,N2); % mask according to VBJS
