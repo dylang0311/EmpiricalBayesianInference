@@ -1,0 +1,6 @@
+# Ignore prerequisite folders
+MatlabProcessManager-master
+MatlabStan-2.15.1.0
+
+% Ignore folder of generated figures
+Figures
