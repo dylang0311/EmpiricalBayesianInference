@@ -1,5 +1,5 @@
 # Ignore prerequisite folders
 packages
 
-% Ignore folder of generated figures
+# Ignore folder of generated figures
 figures
