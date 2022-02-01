@@ -1,4 +1,4 @@
-function output = mcmc_chain(mmvMean,x_tilde,mcmc_samp,solve_space,params,logPosterior,sigT,lHat)
+function [output,goodAcceptRatio] = mcmc_chain(mmvMean,x_tilde,mcmc_samp,solve_space,params,logPosterior,sigT,lHat,m)
 % performs the selected MCMC method for sampling from the posterior
 %
 % Inputs:
@@ -18,11 +18,11 @@ function output = mcmc_chain(mmvMean,x_tilde,mcmc_samp,solve_space,params,logPos
 %       if mcmc_samp = 'hmc'
 %           - hmcEpsilon = final step size of leapfrog method in HMC
 
-
 N1 = params.N1;
 N2 = params.N2;
 output.x = zeros(N1*N2,params.N_M);
 output.x(:,1) = x_tilde; % initial condition
+goodAcceptRatio = 1;
 
 real_and_signal = 0;
 if strcmp(params.signal,'real') && strcmp(solve_space,'signal')
@@ -30,7 +30,7 @@ if strcmp(params.signal,'real') && strcmp(solve_space,'signal')
 end
 
 switch mcmc_samp
-    case{'metHast'}
+    case 'metHast'
     
     % initial proposal distribution variance
     propStd = 0.5;
@@ -48,7 +48,7 @@ switch mcmc_samp
     while or(mean(output.accept_ratio) < params.MINRAT, mean(output.accept_ratio) > params.MAXRAT)
         
         % run chain
-        output = eb_mh_mcmc(output.x,params.N_M,prop,logPosterior);
+        output = eb_mh_mcmc(output.x,params,prop,logPosterior);
         
         % update variances
         if mean(output.accept_ratio) < params.MINRAT
@@ -68,7 +68,7 @@ switch mcmc_samp
         % check if number of iterations exceeds threshold
         cnt = cnt+1;
         if cnt > params.COUNTTHRESH
-            fprintf('Unable to reach appropriate acceptance ratio in posterior # 1 \n')
+            goodAcceptRatio = 0;
             break
         end
     end
@@ -80,7 +80,7 @@ switch mcmc_samp
     cnt = 1;
     while or(mean(output.accept_ratio) < params.HMCMINRAT, mean(output.accept_ratio) > params.HMCMAXRAT)
         if cnt > params.COUNTTHRESH
-            fprintf('Unable to reach appropriate acceptance ratio in posterior # 1 \n')
+            goodAcceptRatio = 0;
             break
         end
         if mean(output.accept_ratio(params.BI:end)) > params.HMCMINRAT
@@ -91,9 +91,29 @@ switch mcmc_samp
         output = eb_hmc(output.x,mmvMean,params,logPosterior,lHat,hmcEpsilon,sigT,solve_space);
         cnt = cnt+1;
     end
-    output.hmcEpsilon = hmcEpsilon;
+    output.epsilon = hmcEpsilon;
+    
+    case 'mala'
+    malaEpsilon = 0.001;
+    output = eb_mala(output.x,mmvMean,params,logPosterior,lHat,malaEpsilon,sigT,solve_space,m);
+    cnt = 1;
+    while or(mean(output.accept_ratio) < params.MALAMINRAT, mean(output.accept_ratio) > params.MALAMAXRAT)
+        if cnt > params.COUNTTHRESH
+            goodAcceptRatio = 0;
+            break
+        end
+        if mean(output.accept_ratio(params.BI:end)) > params.HMCMINRAT
+            malaEpsilon = malaEpsilon * 2;
+        elseif mean(output.accept_ratio(params.BI:end)) < params.HMCMAXRAT
+            malaEpsilon = malaEpsilon / 2;
+        end
+        output = eb_mala(output.x,mmvMean,params,logPosterior,lHat,malaEpsilon,sigT,solve_space,m);
+        cnt = cnt+1;
+    end
+    output.epsilon = malaEpsilon;
         
 end
 
 output.x = reshape(output.x,N1*N2,params.N_M);
+
 end

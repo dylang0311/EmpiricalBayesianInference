@@ -20,25 +20,25 @@ params.noise_model = 'add'; % 'mult' or 'mult_and_add' or 'add'
 params.DIM = 1; % 1 or 2
 params.nMMV = 20; % number of MMVs
 params.LOOKS = 20; % number of looks (Gamma) (only when noise mult)
-params.SNR = 10; % SNR of additive noise (Gaussian) (only when noise add)
+params.SNR = 100; % SNR of additive noise (Gaussian) (only when noise add)
 
 % solver options
-mcmcSamp = 'mala'; % 'metHast', 'hmc', or 'mala'
+mcmcSamp = 'hmc'; % 'metHast', 'hmc', or 'mala'
 params.PRIOR = 2; %p of the ell_p params.PRIOR
 solveSpace = 'signal'; % 'signal' or 'freq' (freq useful when sparseEdge)
 
 % time execution of mcmc sampler?
-params.TIMER = 1;
+timer = 1;
 
 % plotting flags
-sigMask_flag = 0; % signal and mask plots?
+sigMask_flag = 0; % signal and mask?
 plot_figs = 1; % diagnosis plots? 
 acf_flag = 0; % autocorrelation plots?
 trace_flag = 0; % trace plots?
 ar_flag = 1;    % acceptance ratio (AR) plots?
 postdens_flag = 0;    % posterior density at various pixels plots?
 
-params.N1 = 81; % length of signal dimension 1
+params.N1 = 80; % length of signal dimension 1
 N1 = params.N1;
 if params.DIM == 1
     params.N2 = 1;
@@ -163,11 +163,11 @@ elseif strcmp(solveSpace,'freq')
     x_tilde = mmvMean;
 end
 
-[output1,goodAcceptRatio] = mcmc_chain(mmvMean,x_tilde,mcmcSamp,solveSpace,params,f_post_nomask_ln,sigT,lHat,ones(N1*N2,1));
+[output1,goodAcceptRatio] = mcmc_chain(mmvMean,x_tilde,mcmcSamp,solveSpace,params,f_post_nomask_ln,sigT,lHat);
 if goodAcceptRatio == 0
     fprintf('Unable to reach appropriate acceptance ratio in posterior # 1');
 end
-[output2,goodAcceptRatio] = mcmc_chain(mmvMean,x_tilde,mcmcSamp,solveSpace,params,f_post_mask_ln,sigT,lHatMask,m);
+[output2,goodAcceptRatio] = mcmc_chain(mmvMean,x_tilde,mcmcSamp,solveSpace,params,f_post_mask_ln,sigT,lHatMask);
 if goodAcceptRatio == 0
     fprintf('Unable to reach appropriate acceptance ratio in posterior # 2');
 end

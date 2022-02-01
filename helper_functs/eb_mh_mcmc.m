@@ -1,4 +1,4 @@
-function output = eb_mh_mcmc(x,N_M,prop,f_post_ln)
+function output = eb_mh_mcmc(x,params,prop,f_post_ln)
 % Performs the Metropolis Hastings MCMC algorithm
 %
 % Inputs:
@@ -16,9 +16,13 @@ function output = eb_mh_mcmc(x,N_M,prop,f_post_ln)
 
 num_reject = 0;
 num_accept = 0;
-output.accept_ratio = zeros(N_M,1);
+output.accept_ratio = zeros(params.N_M,1);
 
-for kk = 2:N_M
+if params.TIMER
+    tStart = tic;
+end
+
+for kk = 2:params.N_M
     x_cand = prop(x(:,kk-1));
     ratio = (f_post_ln(x_cand)-f_post_ln(x(:,kk-1)));
     accept_alpha = min(1,exp(ratio));
@@ -37,5 +41,9 @@ for kk = 2:N_M
     output.accept_ratio(kk) = num_accept/kk;
 end
 output.x = x; 
+
+if params.TIMER
+    tEnd = toc(tStart)
+end
 end
 

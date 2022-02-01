@@ -1,31 +1,25 @@
-function output = eb_hmc(x,mmvMean,params,f_post_ln,lHat,epsilon,sigT,solve_space)
-% Performs the Hamiltonian Monte Carlo algorithm
+function output = eb_mala(x,mmvMean,params,f_post_ln,lHat,epsilon,sigT,solve_space,m)
+% Performs the Metropolis-adjusted Langevin algorithm
 %
 % Inputs:
 %   - x = 2D array of size N1*N2 x N_M
 %       - The first column of x is the starting position of the chain
 %       - The float values of all columns after the first do not matter
-%   - mmvMean = mean of the multiple measurement vectors
-%   - params = struct of user-defined parameters
+%   - N_M = length of the chain
+%   - prop = function handle for proposal density
 %   - f_post_ln = log posterior density
-%   - lHat = point estimate for regularization parameter
-%   - epsilon = step size of leapfrog method in HMC
-%   - sigT = transform from solve space to signal space
-%   - solve_space = space in which we are building the chain
 %
 % Output:
 %   - output = struct with two fields
 %       - accept_ratio = acceptance ratio at each step of the chain
 %       - x = full chain of size N1*N2 x N_M
-%       - hmcEpsilon = final step size of leapfrog method in HMC
-
 [N,N_M] = size(x);
 
 num_reject = 0;
 num_accept = 0;
 output.accept_ratio = zeros(N_M,1);
-leap_steps = 100;
 T = sparse_operator(params);
+M = diag(m);
 
 if strcmp(solve_space,'signal')
     A = dftmtx(N);
@@ -37,7 +31,6 @@ if params.TIMER
     tStart = tic;
 end
 
-U = @(x) -f_post_ln(x);
 if params.PRIOR == 1
     mu = 0.0005;
     if strcmp(params.signal,'real')
@@ -46,9 +39,10 @@ if params.PRIOR == 1
         y_star = @(x) sign(T*abs(sigT(x))).*min(lHat*abs(T*abs(sigT(x)))/mu,1);
     end
     grad_R = @(x) lHat * y_star(x);
-elseif params.PRIOR == 2
+else
     grad_R = @(x) 2*(T'*T)*sigT(x);
 end
+
 if strcmp(params.signal,'real') && strcmp(solve_space,'signal')
     grad_U = @(x) 2*(real(A'*A)*x-real(A'*mmvMean)) + grad_R(x);
 else
@@ -56,10 +50,17 @@ else
 end
 
 for kk = 2:N_M
-    [x(:,kk),accept] = hmc_step(U,grad_U,epsilon,leap_steps,x(:,kk-1));
-    if accept
+    x_cand = x(:,kk-1) + epsilon^2*M*grad_U(x(:,kk-1))/2+epsilon*sqrt(M)*randn(N,1);
+    prop_ln = @(x,y) -1/(2*epsilon^2)*norm(x-y-epsilon^2/2*grad_U(y),2)^2;
+    ln_ratio = f_post_ln(x_cand) + prop_ln(x(:,kk-1),x_cand) -...
+        f_post_ln(x(:,kk-1)) - prop_ln(x_cand,x(:,kk-1));
+    accept_alpha = min(0,ln_ratio);
+    u = log(rand);
+    if u < accept_alpha
+        x(:,kk) = x_cand;
         num_accept = num_accept + 1;
     else
+        x(:,kk) = x(:,kk-1);
         num_reject = num_reject + 1;
     end
     output.accept_ratio(kk) = num_accept/(kk-1);
@@ -71,3 +72,4 @@ if params.TIMER
     tEnd = toc(tStart)
 end
 end
+
