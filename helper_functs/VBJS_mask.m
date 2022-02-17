@@ -11,7 +11,7 @@ function mask = VBJS_mask(f_tilde)
 
 [N,J] = size(f_tilde);  % dimensions of MMV
 P = zeros(N, J);    % initialization of normalized MMV in edge domain
-tau = .25; % threshold to determine if in support of sparse domain
+tau = .275; % threshold to determine if in support of sparse domain
 
 % transforms  f_tilde to sparse (edge) domain
 for ii=1:J

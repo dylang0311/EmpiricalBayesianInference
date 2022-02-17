@@ -1,4 +1,5 @@
-function [output,goodAcceptRatio] = mcmc_chain(mmvMean,x_tilde,mcmc_samp,solve_space,params,logPosterior,sigT,lHat,m)
+function [output,goodAcceptRatio] = ...
+    mcmc_chain(mmvMean,x_tilde,mcmc_samp,solve_space,params,logPosterior,sigT,lHat,malaM,regParams,m,A,AH,etaInv)
 % performs the selected MCMC method for sampling from the posterior
 %
 % Inputs:
@@ -74,6 +75,12 @@ switch mcmc_samp
     end
     output.propStd = propStd;
     
+    
+    case 'metHastBlock'
+        
+    output = eb_mhBlock(output.x,params,m,regParams,mmvMean,A,AH,etaInv);
+    
+    
     case 'hmc'
     hmcEpsilon = 0.001; % initialize stepsize for leapfrog solver
     output = eb_hmc(output.x,mmvMean,params,logPosterior,lHat,hmcEpsilon,sigT,solve_space);
@@ -93,9 +100,10 @@ switch mcmc_samp
     end
     output.epsilon = hmcEpsilon;
     
+    
     case 'mala'
     malaEpsilon = 0.001;
-    output = eb_mala(output.x,mmvMean,params,logPosterior,lHat,malaEpsilon,sigT,solve_space,m);
+    output = eb_mala(output.x,mmvMean,params,logPosterior,lHat,malaEpsilon,sigT,solve_space,malaM);
     cnt = 1;
     while or(mean(output.accept_ratio) < params.MALAMINRAT, mean(output.accept_ratio) > params.MALAMAXRAT)
         if cnt > params.COUNTTHRESH
@@ -107,7 +115,7 @@ switch mcmc_samp
         elseif mean(output.accept_ratio(params.BI:end)) < params.HMCMAXRAT
             malaEpsilon = malaEpsilon / 2;
         end
-        output = eb_mala(output.x,mmvMean,params,logPosterior,lHat,malaEpsilon,sigT,solve_space,m);
+        output = eb_mala(output.x,mmvMean,params,logPosterior,lHat,malaEpsilon,sigT,solve_space,malaM);
         cnt = cnt+1;
     end
     output.epsilon = malaEpsilon;

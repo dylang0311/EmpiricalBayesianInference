@@ -5,9 +5,14 @@ function output = eb_mala(x,mmvMean,params,f_post_ln,lHat,epsilon,sigT,solve_spa
 %   - x = 2D array of size N1*N2 x N_M
 %       - The first column of x is the starting position of the chain
 %       - The float values of all columns after the first do not matter
-%   - N_M = length of the chain
-%   - prop = function handle for proposal density
+%   - mmvMean = mean of the multiple measurement vectors
+%   - params = struct of user-defined parameters
 %   - f_post_ln = log posterior density
+%   - lHat = point estimate for regularization parameter
+%   - epsilon = step size
+%   - sigT = transform from solve space to signal space
+%   - solve_space = space in which we are building the chain
+%   - m = mass matrix
 %
 % Output:
 %   - output = struct with two fields

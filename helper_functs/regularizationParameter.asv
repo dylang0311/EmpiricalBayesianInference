@@ -26,36 +26,36 @@ reg_normed_laplace = zeros(1,params.nMMV);
 reg_normed_SISP = zeros(1,params.nMMV);
 for jj = 1:params.nMMV
     data_fidelity_normed(jj) = norm(mmv(:,jj)-mmvMean,2)^2;
-%     if strcmp(params.signal,'real')
-%         reg_normed_laplace(jj) = norm(xJumpVec(:,jj) + yJumpVec(:,jj),2)^2;
-%         reg_normed_SISP(jj) = norm(reshape(M.*reshape(xJumpVec(:,jj) + yJumpVec(:,jj),N1,N2),[],1),2)^2;
-%     elseif strcmp(params.signal,'complex')
-%         if params.DIM == 1
-%             reg_normed_laplace(jj) = norm(L*abs(AH(mmv(:,jj))),2)^2;
-%             reg_normed_SISP(jj) = norm(M.*(L*abs(AH(mmv(:,jj)))),2)^2;
-%         elseif params.DIM == 2
-%             reg_normed_laplace(jj) = norm(L*abs(AH(mmv(:,jj))),2)^2;
-%             reg_normed_SISP(jj) = norm(M(:).*L*abs(AH(mmv(:,jj))),2)^2;
-%         end
-%     end
+    if strcmp(params.signal,'real')
+        reg_normed_laplace(jj) = norm(xJumpVec(:,jj) + yJumpVec(:,jj),2)^2;
+        reg_normed_SISP(jj) = norm(reshape(M.*reshape(xJumpVec(:,jj) + yJumpVec(:,jj),N1,N2),[],1),2)^2;
+    elseif strcmp(params.signal,'complex')
+        if params.DIM == 1
+            reg_normed_laplace(jj) = norm(L*abs(AH(mmv(:,jj))),2)^2;
+            reg_normed_SISP(jj) = norm(M.*(L*abs(AH(mmv(:,jj)))),2)^2;
+        elseif params.DIM == 2
+            reg_normed_laplace(jj) = norm(L*abs(AH(mmv(:,jj))),2)^2;
+            reg_normed_SISP(jj) = norm(M(:).*L*abs(AH(mmv(:,jj))),2)^2;
+        end
+    end
 end
 
 if strcmp(params.signal,'real')
-    [xJumpVec,yJumpVec,~] = cFactor(mmvMean,AH,params);
-    reg_normed_laplace = norm(xJumpVec + yJumpVec,2)^2;
-    reg_normed_SISP = norm(reshape(M.*reshape(xJumpVec + yJumpVec,N1,N2),[],1),2)^2;
-elseif strcmp(params.signal,'complex')
-    [xJumpVec,yJumpVec,~] = cFactor(mmvMean,AH,params);
-    reg_normed_laplace = norm(xJumpVec + yJumpVec,2)^2;
-    reg_normed_SISP = norm(reshape(M.*reshape(xJumpVec + yJumpVec,N1,N2),[],1),2)^2;
-    if params.DIM == 1
-%         reg_normed_laplace = norm(L*abs(AH(mmvMean)),2)^2;
-%         reg_normed_SISP = norm(M.*(L*abs(AH(mmvMean))),2)^2;
-    elseif params.DIM == 2
-%         reg_normed_laplace = norm(L*abs(AH(mmvMean)),2)^2;
-%         reg_normed_SISP = norm(M(:).*L*abs(AH(mmvMean)),2)^2;
+        reg_normed_laplace(jj) = norm(xJumpVec(:,jj) + yJumpVec(:,jj),2)^2;
+        reg_normed_SISP(jj) = norm(reshape(M.*reshape(xJumpVec(:,jj) + yJumpVec(:,jj),N1,N2),[],1),2)^2;
+    elseif strcmp(params.signal,'complex')
+        if params.DIM == 1
+            reg_normed_laplace(jj) = norm(L*abs(AH(mmv(:,jj))),2)^2;
+            reg_normed_SISP(jj) = norm(M.*(L*abs(AH(mmv(:,jj)))),2)^2;
+        elseif params.DIM == 2
+            reg_normed_laplace(jj) = norm(L*abs(AH(mmv(:,jj))),2)^2;
+            reg_normed_SISP(jj) = norm(M(:).*L*abs(AH(mmv(:,jj))),2)^2;
+        end
     end
-end
+
+[xJumpVec,yJumpVec,~] = cFactor(mmvMean,AH,params);
+reg_normed_laplace = norm(xJumpVec + yJumpVec,2)^2;
+reg_normed_SISP = norm(reshape(M.*reshape(xJumpVec + yJumpVec,N1,N2),[],1),2)^2;
 
 regParams.sigmaSq = 1/(N1*N2)*mean(data_fidelity_normed)/params.nMMV;
 regParams.etaSqLaplace = 1/(N1*N2)*mean(reg_normed_laplace);

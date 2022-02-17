@@ -10,35 +10,35 @@ close all
 % added by Dylan Green.
 
 
-params.noRNG = 894;
+params.noRNG = 901;
 rng(params.noRNG);
 %% Parameters
 % forward model options
-params.signal = 'real'; % 'real' or 'complex' (in complex case, phase random)
+params.signal = 'complex'; % 'real' or 'complex' (in complex case, phase random)
 params.funct = 'sparseEdge'; % 'sparseSig' or 'sparseEdge'
 params.noise_model = 'add'; % 'mult' or 'mult_and_add' or 'add'
-params.DIM = 1; % 1 or 2
+params.DIM = 2; % 1 or 2
 params.nMMV = 20; % number of MMVs
 params.LOOKS = 20; % number of looks (Gamma) (only when noise mult)
-params.SNR = 100; % SNR of additive noise (Gaussian) (only when noise add)
+params.SNR = 20; % SNR of additive noise (Gaussian) (only when noise add)
 
 % solver options
-mcmcSamp = 'hmc'; % 'metHast', 'hmc', or 'mala'
+mcmcSamp = 'metHastBlock'; % 'metHast', 'hmc', 'mala', or 'metHastBlock'
 params.PRIOR = 2; %p of the ell_p params.PRIOR
 solveSpace = 'signal'; % 'signal' or 'freq' (freq useful when sparseEdge)
 
 % time execution of mcmc sampler?
-timer = 1;
+params.TIMER = 1;
 
 % plotting flags
-sigMask_flag = 0; % signal and mask?
+sigMask_flag = 1; % signal and mask plots?
 plot_figs = 1; % diagnosis plots? 
 acf_flag = 0; % autocorrelation plots?
 trace_flag = 0; % trace plots?
-ar_flag = 1;    % acceptance ratio (AR) plots?
+ar_flag = 0;    % acceptance ratio (AR) plots?
 postdens_flag = 0;    % posterior density at various pixels plots?
 
-params.N1 = 80; % length of signal dimension 1
+params.N1 = 33; % length of signal dimension 1
 N1 = params.N1;
 if params.DIM == 1
     params.N2 = 1;
@@ -48,7 +48,7 @@ end
 N2 = params.N2;
 
 params.N_M = 10000; % Chain length
-params.BI = 5000; % burn in length
+params.BI = 2500; % burn in length
 
 params.COUNTTHRESH = 10; % number of attempts to get the AR acceptable
 params.MINRAT = 0.2; % minimal acceptable AR for MH MCMC
@@ -90,8 +90,9 @@ mmvMean = 1/params.nMMV*sum(mmv,2); % mean of all the MMVs
 if strcmp(params.funct,'sparseEdge')
     xJumpVec = zeros(N1*N2,params.nMMV);
     yJumpVec = zeros(N1*N2,params.nMMV);
+    totJumpVec = zeros(N1*N2,params.nMMV);
     for jj = 1:params.nMMV
-        [xJumpVec(:,jj),yJumpVec(:,jj),~] = cFactor(mmv(:,jj),AH,params);
+        [xJumpVec(:,jj),yJumpVec(:,jj),totJumpVec(:,jj)] = cFactor(mmv(:,jj),AH,params);
     end
 end
 
@@ -138,13 +139,12 @@ end
 %% lambda approximations
 fprintf('Approximating regularization parameter...\n');
 
-[lHat,lHatMask] = regularizationParameter(mmv,params,xJumpVec,yJumpVec,M,AH);
-
+regParams = regularizationParameter(mmv,params,xJumpVec,yJumpVec,M,AH);
 
 %% log posterior densities we wish to explore
 
 [f_post_nomask_ln,f_post_mask_ln,sigT] = posterior_densities(mmvMean,solveSpace,params,...
-    lHat,lHatMask,A,AH,M);
+    regParams.lHat,regParams.lHatMask,A,AH,M);
 
 titlewoutmask = 'Additive Posterior Without Mask';
 titlemask = 'Additive Posterior With Mask';
@@ -163,11 +163,17 @@ elseif strcmp(solveSpace,'freq')
     x_tilde = mmvMean;
 end
 
-[output1,goodAcceptRatio] = mcmc_chain(mmvMean,x_tilde,mcmcSamp,solveSpace,params,f_post_nomask_ln,sigT,lHat);
+%% First Chain
+[output1,goodAcceptRatio] = mcmc_chain(mmvMean,x_tilde,mcmcSamp,solveSpace,...
+    params,f_post_nomask_ln,sigT,regParams.lHat,ones(N1*N2,1),regParams,ones(N1,N2),A,AH,1/regParams.etaSqLaplace);
 if goodAcceptRatio == 0
     fprintf('Unable to reach appropriate acceptance ratio in posterior # 1');
 end
-[output2,goodAcceptRatio] = mcmc_chain(mmvMean,x_tilde,mcmcSamp,solveSpace,params,f_post_mask_ln,sigT,lHatMask);
+
+%% Second Chain
+malaM = 9*(m<0.5)+1;
+[output2,goodAcceptRatio] = mcmc_chain(mmvMean,x_tilde,mcmcSamp,solveSpace,...
+    params,f_post_mask_ln,sigT,regParams.lHatMask,malaM,regParams,m,A,AH,1/regParams.etaSqSISP);
 if goodAcceptRatio == 0
     fprintf('Unable to reach appropriate acceptance ratio in posterior # 2');
 end
@@ -229,6 +235,16 @@ if plot_figs
             plot(output2c.ci(2,:),'r');plot(output2c.ci(1,:),'r');
             plot(trueSignal,'k');hold off
             saveas(gcf,[fig_fold,'/meanAndCI_',save_file]);
+            
+            figure;
+            plot(trueSignal,'k--','LineWidth',1.5);hold on;
+            plot(output1c.image,'r');
+            plot(output2c.image,'b');
+            shade(1:N1,output1c.ci(2,:),'r',1:N1,output1c.ci(1,:),'r','FillType',[1 2;2 1]);
+            shade(1:N1,output2c.ci(2,:),'b',1:N1,output2c.ci(1,:),'b','FillType',[1 2;2 1]);
+            legend('TrueSignal','No Mask','Mask');hold off;
+            saveas(gcf,[fig_fold,'/meanAndCIBothShaded_',save_file]);
+
         elseif strcmp(params.signal,'complex')
             figure;subplot(1,2,1);
             plot(output1c.image,'b');title('MH No Mask Magnitude Mean and CI');hold on
@@ -240,7 +256,16 @@ if plot_figs
             plot(abs(output2c.ci(2,:)),'r');plot(abs(output2c.ci(1,:)),'r');
             plot(trueSignalMag,'k');hold off
             saveas(gcf,[fig_fold,'/meanAndCIMag_',save_file]);
-
+            
+            figure;
+            plot(trueSignalMag,'k--','LineWidth',1.5);hold on;
+            plot(output1c.image,'r');
+            plot(output2c.image,'b');
+            shade(1:N1,abs(output1c.ci(2,:)),'r',1:N1,abs(output1c.ci(1,:)),'r','FillType',[1 2;2 1]);
+            shade(1:N1,abs(output2c.ci(2,:)),'b',1:N1,abs(output2c.ci(1,:)),'b','FillType',[1 2;2 1]);
+            legend('TrueSignal','No Mask','Mask');hold off;
+            saveas(gcf,[fig_fold,'/meanAndCIMagBothShaded_',save_file]);
+            
             figure;subplot(1,2,1);
             plot(output1c.imageAng,'b');title('MH No Mask Phase Angle Mean and CI');hold on
             plot(output1c.ciAng(2,:),'r');plot(output1c.ciAng(1,:),'r');
@@ -253,12 +278,12 @@ if plot_figs
             saveas(gcf,[fig_fold,'/meanAndCIAng_',save_file]);
 
             figure;
-            phaseErrorLaplace = abs(mod(output1c.imageAng - trueSignalAng - pi/2,pi)-pi/2);
-            phaseErrorSISP = abs(mod(output2c.imageAng - trueSignalAng - pi/2,pi)-pi/2);
-            plot(phaseErrorLaplace);title(['Phase Error (No Mask avg ',...
-                num2str(mean(phaseErrorLaplace)),' and Mask avg ',...
-                num2str(mean(phaseErrorSISP)),')']);hold on
-            plot(phaseErrorSISP);legend('No Mask','Mask');hold off
+            phaseErrorNoMask = abs(mod(output1c.imageAng - trueSignalAng - pi/2,pi)-pi/2);
+            phaseErrorMask = abs(mod(output2c.imageAng - trueSignalAng - pi/2,pi)-pi/2);
+            plot(phaseErrorNoMask);title(['Phase Error (No Mask avg ',...
+                num2str(mean(phaseErrorNoMask)),' and Mask avg ',...
+                num2str(mean(phaseErrorMask)),')']);hold on
+            plot(phaseErrorMask);legend('No Mask','Mask');hold off
             saveas(gcf,[fig_fold,'/phaseError_',save_file]);
 
             figure;
@@ -288,30 +313,31 @@ if plot_figs
         saveas(gcf,[fig_fold,'/mean_',save_file]);
 
         max_color1 = max(abs(output1c.ci(2,:)-output1c.ci(1,:)),[],'all');
-        max_color3 = max(abs(output2c.ci(2,:)-output2c.ci(1,:)),[],'all');
-        max_color = max([max_color1 max_color3]);
+        max_color2 = max(abs(output2c.ci(2,:)-output2c.ci(1,:)),[],'all');
+        max_color = max([max_color1 max_color2]);
 
         figure;subplot(1,2,1);
         imagesc(reshape(abs(output1c.ci(2,:)-output1c.ci(1,:)),N1,N2)); 
         colormap jet; 
         axis xy image 
-        xticks([])
-        yticks([])
-        colorbar
+        xticks([]);
+        yticks([]);
+        colorbar;
         caxis([0 max_color]);
-        title('MH Laplace CI') 
+        title('MH No Mask CI') 
 
 
         subplot(1,2,2);
         imagesc(reshape(abs(output2c.ci(2,:)-output2c.ci(1,:)),N1,N2)); 
         colormap jet; 
         axis xy image 
-        xticks([])
-        yticks([])
-        colorbar
+        xticks([]);
+        yticks([]);
+        colorbar;
         caxis([0 max_color]);
-        title('MH SISP CI')
+        title('MH Mask CI')
         saveas(gcf,[fig_fold,'/CI_',save_file]);
+        
 
         if strcmp(params.funct,'sparseSig')
             figure;subplot(1,2,1);
@@ -322,17 +348,17 @@ if plot_figs
             plot(ci11(mod(ind(1),N1),1:N2),'b--','LineWidth',1.5);
             plot(ci12(mod(ind(1),N1),1:N2),'b--','LineWidth',1.5);
             plot(abs(im1(mod(ind(1),N1),1:N2)),'r');hold off;
-            ylim([0 2]);xlim([1 N1]);title('No Mask');
+            ylim([0 3]);xlim([1 N1]);title('No Mask');
 
             subplot(1,2,2);
             im3 = reshape(output2c.image,N1,N2);
-            ci31 = reshape(output2c.ci(1,:),N1,N2);
-            ci32 = reshape(output2c.ci(2,:),N1,N2);
+            ci21 = reshape(output2c.ci(1,:),N1,N2);
+            ci22 = reshape(output2c.ci(2,:),N1,N2);
             plot(trueSignalMag(mod(ind(1),N1),1:N2),'k--','LineWidth',1.5);hold on;
-            plot(ci31(mod(ind(1),N1),1:N2),'b--','LineWidth',1.5);
-            plot(ci32(mod(ind(1),N1),1:N2),'b--','LineWidth',1.5);
+            plot(ci21(mod(ind(1),N1),1:N2),'b--','LineWidth',1.5);
+            plot(ci22(mod(ind(1),N1),1:N2),'b--','LineWidth',1.5);
             plot(abs(im3(mod(ind(1),N1),1:N2)),'r');hold off;
-            ylim([0 2]);xlim([1 N1]);title('Mask');
+            ylim([0 3]);xlim([1 N1]);title('Mask');
 
             saveas(gcf,[fig_fold,'/meanAndCISlice_',save_file]);
         elseif strcmp(params.funct,'sparseEdge')
@@ -344,19 +370,49 @@ if plot_figs
             plot(ci11(subInd(3,1),1:N2),'b--','LineWidth',1.5);
             plot(ci12(subInd(3,1),1:N2),'b--','LineWidth',1.5);
             plot(abs(im1(subInd(3,1),1:N2)),'r');hold off;
-            ylim([0 2]);xlim([1 N1]);title('No Mask');
+            ylim([0 3]);xlim([1 N1]);title('No Mask');
 
             subplot(1,2,2);
             im3 = reshape(output2c.image,N1,N2);
-            ci31 = reshape(output2c.ci(1,:),N1,N2);
-            ci32 = reshape(output2c.ci(2,:),N1,N2);
+            ci21 = reshape(output2c.ci(1,:),N1,N2);
+            ci22 = reshape(output2c.ci(2,:),N1,N2);
             plot(trueSignalMag(subInd(3,1),1:N2),'k--','LineWidth',1.5);hold on;
-            plot(ci31(subInd(3,1),1:N2),'b--','LineWidth',1.5);
-            plot(ci32(subInd(3,1),1:N2),'b--','LineWidth',1.5);
+            plot(ci21(subInd(3,1),1:N2),'b--','LineWidth',1.5);
+            plot(ci22(subInd(3,1),1:N2),'b--','LineWidth',1.5);
             plot(abs(im3(subInd(3,1),1:N2)),'r');hold off;
-            ylim([0 2]);xlim([1 N1]);title('Mask');
+            ylim([0 3]);xlim([1 N1]);title('Mask');
             saveas(gcf,[fig_fold,'/meanAndCISlice_',save_file]);
+            
+            figure;
+            plot(trueSignalMag(subInd(3,1),1:N2),'k--','LineWidth',1.5);hold on;
+            plot(abs(im1(subInd(3,1),1:N2)),'r');
+            plot(abs(im3(subInd(3,1),1:N2)),'b');
+            shade(1:N1,ci11(subInd(3,1),1:N2),'r',1:N1,ci12(subInd(3,1),1:N2),'r','FillType',[1 2;2 1]);
+            shade(1:N1,ci21(subInd(3,1),1:N2),'b',1:N1,ci22(subInd(3,1),1:N2),'b','FillType',[1 2;2 1]);
+            legend('TrueSignal','No Mask','Mask');hold off;
+            saveas(gcf,[fig_fold,'/meanAndCISliceBothShaded_',save_file]);
         end
+        
+        if strcmp(params.signal,'complex')
+            figure;
+            phaseErrorNoMask = reshape(abs(mod(output1c.imageAng - trueSignalAng - pi/2,pi)-pi/2),N1,N2);
+            phaseErrorMask = reshape(abs(mod(output2c.imageAng - trueSignalAng - pi/2,pi)-pi/2),N1,N2);
+            max_color1 = max(phaseErrorNoMask,[],'all');
+            max_color2 = max(phaseErrorMask,[],'all');
+            max_color = max([max_color1 max_color2]);
+            subplot(1,2,1);
+            imagesc(phaseErrorNoMask);title(['Phase Error (No Mask avg ',...
+                num2str(mean(phaseErrorNoMask,'all')),')']);
+            axis xy image 
+            xticks([]);yticks([]);colorbar;caxis([0 max_color]);
+            subplot(1,2,2);
+            imagesc(phaseErrorMask);title(['Phase Error Mask avg ',...
+                num2str(mean(phaseErrorMask,'all')),')']);
+            axis xy image
+            xticks([]);yticks([]);colorbar;caxis([0 max_color]);
+            saveas(gcf,[fig_fold,'/phaseError_',save_file]);
+        end
+            
     end
 end
 
@@ -368,7 +424,7 @@ if acf_flag
     
     addpath('./helper_functs/acf/');
     
-    lag_num = 5000;
+    lag_num = 2500;
     
     % x1
     acf_plots(abs(x1_1),lag_num,[fig_fold,'/acf_x1_ind1_',save_file]);
@@ -383,6 +439,20 @@ if acf_flag
     acf_plots(abs(x2_3),lag_num,[fig_fold,'/acf_x2_ind3_',save_file]);
     acf_plots(abs(x2_4),lag_num,[fig_fold,'/acf_x2_ind4_',save_file]);
     
+    if strcmp(params.signal,'complex')
+        % x1
+        acf_plots(angle(x1_1),lag_num,[fig_fold,'/acf_x1Ang_ind1_',save_file]);
+        acf_plots(angle(x1_2),lag_num,[fig_fold,'/acf_x1Ang_ind2_',save_file]);
+        acf_plots(angle(x1_3),lag_num,[fig_fold,'/acf_x1Ang_ind3_',save_file]);
+        acf_plots(angle(x1_4),lag_num,[fig_fold,'/acf_x1Ang_ind4_',save_file]);
+
+
+        % x2
+        acf_plots(angle(x2_1),lag_num,[fig_fold,'/acf_x2Ang_ind1_',save_file]);
+        acf_plots(angle(x2_2),lag_num,[fig_fold,'/acf_x2Ang_ind2_',save_file]);
+        acf_plots(angle(x2_3),lag_num,[fig_fold,'/acf_x2Ang_ind3_',save_file]);
+        acf_plots(angle(x2_4),lag_num,[fig_fold,'/acf_x2Ang_ind4_',save_file]);
+    end
 end
 
 %% Trace plots
@@ -434,16 +504,28 @@ if postdens_flag
         elseif strcmp(params.signal,'complex')
             point_spread1 = abs(output1c.x(ind(ii),params.BI+1:params.N_M));
             point_spread2 = abs(output2c.x(ind(ii),params.BI+1:params.N_M));
+            point_spread1Ang = angle(output1c.x(ind(ii),params.BI+1:params.N_M));
+            point_spread2Ang = angle(output2c.x(ind(ii),params.BI+1:params.N_M));
             figtitle = sprintf('Probability Density Functions of Magnitude at Index %d',ind(ii));
+            figtitleAng = sprintf('Probability Density Functions of Angle at Index %d',ind(ii));
             signalToCompare = trueSignalMag;
         end
 
-        subplot(2,2,ii);kde(point_spread1);hold on
+        figure(101);subplot(2,2,ii);kde(point_spread1);hold on
         kde(point_spread2);
         xline(signalToCompare(ind(ii)),'--k','LineWidth',2);
         title(figtitle);
         legend('No Mask','Mask','True Value');
         set(gcf,'Position',[100 100 1000 800]);
         saveas(gcf,[fig_fold,'/probDensities_',save_file]);
+        if strcmp(params.signal,'complex')
+            figure(102);subplot(2,2,ii);kde(point_spread1Ang);hold on
+            kde(point_spread2Ang);
+            xline(trueSignalAng(ind(ii)),'--k','LineWidth',2);
+            title(figtitleAng);
+            legend('No Mask','Mask','True Value');
+            set(gcf,'Position',[100 100 1000 800]);
+            saveas(gcf,[fig_fold,'/probDensitiesAng_',save_file]);
+        end
     end
 end

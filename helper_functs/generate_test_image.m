@@ -20,8 +20,8 @@ end
 
 % 'sqCirc' creates an image of a centered circle with a square inset
 if strcmp(form,'sqCirc')
-    h_base = 1;
-    h_circ = 5;
+    h_base = 0;
+    h_circ = 8;
     h_square = 3;
     r_circ = round(N_s/2-N_s/9);
     r_square = round(N_s/2-N_s/3);
@@ -38,10 +38,11 @@ if strcmp(form,'sqCirc')
             end
         end
     end
-    im = im./max(im,[],'all');
-    subInd = [round(N_s/2) round(N_s/9);
-              round(N_s/3) round(N_s/2);
-              round(N_s/2) round(N_s/2);
+%     im(:,round(4*N_s/9):round(5*N_s/9)) = 3;
+    im = im./max(im,[],'all')+1;
+    subInd = [round(N_s/2)+1 round(N_s/9)+1;
+              round(N_s/3)+1 round(N_s/2)+1;
+              round(N_s/2)+1 round(N_s/2)+1;
               3 3];
     ind = sub2ind([N1 N2],subInd(:,1),subInd(:,2));
 
